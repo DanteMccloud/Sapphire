@@ -34,11 +34,6 @@
 
 #include "Script/ScriptMgr.h"
 
-#include "Action/Action.h"
-#include "Action/ActionTeleport.h"
-#include "Action/EventAction.h"
-#include "Action/EventItemAction.h"
-
 #include "Math/CalcStats.h"
 #include "Math/CalcBattle.h"
 
@@ -1555,7 +1550,7 @@ void Sapphire::Entity::Player::autoAttack( CharaPtr pTarget )
     auto effectPacket = std::make_shared< Server::EffectPacket >( getId(), pTarget->getId(), 8 );
     effectPacket->setRotation( Util::floatToUInt16Rot( getRot() ) );
 
-    Server::EffectEntry entry{};
+    Common::EffectEntry entry{};
     entry.value = damage;
     entry.effectType = Common::ActionEffectType::Damage;
     entry.hitSeverity = Common::ActionHitSeverityType::NormalDamage;
@@ -1569,7 +1564,7 @@ void Sapphire::Entity::Player::autoAttack( CharaPtr pTarget )
     auto effectPacket = std::make_shared< Server::EffectPacket >( getId(), pTarget->getId(), 7 );
     effectPacket->setRotation( Util::floatToUInt16Rot( getRot() ) );
 
-    Server::EffectEntry entry{};
+    Common::EffectEntry entry{};
     entry.value = damage;
     entry.effectType = Common::ActionEffectType::Damage;
     entry.hitSeverity = Common::ActionHitSeverityType::NormalDamage;
@@ -1833,36 +1828,10 @@ void Sapphire::Entity::Player::emoteInterrupt()
   sendToInRangeSet( makeActorControl142( getId(), ActorControlType::EmoteInterrupt ) );
 }
 
-void Sapphire::Entity::Player::teleportQuery( uint16_t aetheryteId, FrameworkPtr pFw )
+void Sapphire::Entity::Player::teleportQuery( uint16_t aetheryteId )
 {
-  auto pExdData = pFw->get< Data::ExdDataGenerated >();
-  // TODO: only register this action if enough gil is in possession
-  auto targetAetheryte = pExdData->get< Sapphire::Data::Aetheryte >( aetheryteId );
-
-  if( targetAetheryte )
-  {
-    auto fromAetheryte = pExdData->get< Sapphire::Data::Aetheryte >(
-      pExdData->get< Sapphire::Data::TerritoryType >( getZoneId() )->aetheryte );
-
-    // calculate cost - does not apply for favorite points or homepoints neither checks for aether tickets
-    auto cost = static_cast< uint16_t > (
-      ( std::sqrt( std::pow( fromAetheryte->aetherstreamX - targetAetheryte->aetherstreamX, 2 ) +
-                   std::pow( fromAetheryte->aetherstreamY - targetAetheryte->aetherstreamY, 2 ) ) / 2 ) + 100 );
-
-    // cap at 999 gil
-    cost = cost > uint16_t{ 999 } ? uint16_t{ 999 } : cost;
-
-    bool insufficientGil = getCurrency( Common::CurrencyType::Gil ) < cost;
-    // TODO: figure out what param1 really does
-    queuePacket( makeActorControl143( getId(), TeleportStart, insufficientGil ? 2 : 0, aetheryteId ) );
-
-    if( !insufficientGil )
-    {
-      Action::ActionPtr pActionTeleport;
-      pActionTeleport = Action::make_ActionTeleport( getAsPlayer(), aetheryteId, cost, pFw );
-      setCurrentAction( pActionTeleport );
-    }
-  }
+  m_teleportTargetAetheryte = aetheryteId;
+  sendDebug( "requested aetheryte destination: {0}", aetheryteId );
 }
 
 uint8_t Sapphire::Entity::Player::getNextObjSpawnIndexForActorId( uint32_t actorId )

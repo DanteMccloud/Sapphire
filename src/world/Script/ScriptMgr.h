@@ -70,7 +70,12 @@ namespace Sapphire::Scripting
 
     bool onBNpcKill( Entity::Player& player, uint16_t nameId );
 
-    bool onCastFinish( Entity::Player& pPlayer, Entity::CharaPtr pTarget, uint32_t actionId );
+    bool onEObjHit( Entity::Player& player, uint64_t actorId );
+
+    bool onCastStart( Action::Action& currentAction );
+    bool onCastInterrupt( Action::Action& currentAction );
+    bool onCastFinish( Action::Action& currentAction );
+    bool onCharaHit( Action::Action& currentAction, Entity::Chara& hitActor );
 
     bool onStatusReceive( Entity::CharaPtr pActor, uint32_t effectId );
 

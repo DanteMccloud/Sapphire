@@ -3,6 +3,13 @@
 
 #include <Common.h>
 #include "ForwardsZone.h"
+#include <array>
+
+namespace Sapphire::Data
+{
+  struct Action;
+  using ActionPtr = std::shared_ptr< Action >;
+}
 
 namespace Sapphire::Action
 {
@@ -11,59 +18,124 @@ namespace Sapphire::Action
   {
 
   public:
+    struct ActionCostEntry
+    {
+      Common::ActionCostType m_costType;
+      uint16_t m_cost;
+    };
+
+    using ActionCostArray = std::array< ActionCostEntry, 2 >;
+
     Action();
+    Action( Entity::CharaPtr caster, uint32_t actionId, Data::ActionPtr action, FrameworkPtr fw );
 
     virtual ~Action();
 
-    uint16_t getId() const;
+    uint32_t getId() const;
 
-    Common::HandleActionType getHandleActionType() const;
+    void setPos( Common::FFXIVARR_POSITION3 pos );
+    Common::FFXIVARR_POSITION3 getPos() const;
 
+    void setTargetChara( Entity::CharaPtr chara );
+    void setResidentTargetId( uint64_t targetId );
     Entity::CharaPtr getTargetChara() const;
+    Entity::CharaPtr getSourceChara() const;
 
     bool isInterrupted() const;
-
-    void setInterrupted();
-
-    uint64_t getStartTime() const;
-
-    void setStartTime( uint64_t startTime );
+    void setInterrupted( Common::ActionInterruptType type );
 
     uint32_t getCastTime() const;
-
     void setCastTime( uint32_t castTime );
 
-    Entity::CharaPtr getActionSource() const;
+    /*!
+     * @brief Checks if the action *may* target a resident instead of an actor
+     * @return true if the target *may* be a resident and not an actor, otherwise false.
+     */
+    bool hasResidentTarget() const;
 
-    virtual void onStart()
-    {
-    };
+    const ActionCostArray& getCostArray() const;
 
-    virtual void onFinish()
-    {
-    };
+    /*!
+     * @brief Tests whether the action is instantly usable or has a cast assoc'd with it
+     * @return true if action has a cast time
+     */
+    bool hasCastTime() const;
 
-    virtual void onInterrupt()
-    {
-    };
+    void buildEffectPackets();
+
+    /*!
+     * @brief Damages a target and adds the effect entry
+     * @param potency The amount of damage the target takes
+     * @param chara The chara to inflict damage upon
+     */
+    void damageTarget( uint16_t potency, Entity::Chara& chara );
+
+    /*!
+     * @brief Heals a target and adds the effect entry
+     * @param potency Amount of healing to apply
+     * @param chara Chara to receive healing
+     */
+    void healTarget( uint16_t potency, Entity::Chara& chara );
+
+    /*!
+     * @brief Starts the cast. Finishes it immediately if there is no cast time (weaponskills).
+     */
+    virtual void castStart();
+    virtual void castFinish();
+    virtual void castInterrupt();
 
     // update action, if returns true, action is done and has to be removed from the actor
     virtual bool update();
 
   protected:
-    uint16_t m_id;
-    Common::HandleActionType m_handleActionType;
+
+    void calculateActionCost();
+    void calculateMPCost( uint8_t costArrayIndex );
+
+    /*!
+     * @brief Some actions are capable of both healing and dealing damage. This identifies them.
+     */
+    enum EffectPacketIdentity : uint8_t
+    {
+      DamageEffect,
+      HealingEffect,
+
+      MAX_ACTION_EFFECT_PACKET_IDENT
+    };
+
+    struct EffectPacketData
+    {
+      std::vector< Common::EffectEntry > m_entries;
+      std::vector< uint32_t > m_hitActors;
+    };
+
+    uint32_t m_id;
+
+    Common::ActionCostType m_costType;
+    uint16_t m_cost;
+
+    ActionCostArray m_actionCost;
 
     uint64_t m_startTime;
     uint32_t m_castTime;
+    uint16_t m_recastTime;
+    uint8_t m_cooldownGroup;
+    int8_t m_range;
+    uint8_t m_effectRange;
+    Common::ActionAspect m_aspect;
 
     Entity::CharaPtr m_pSource;
     Entity::CharaPtr m_pTarget;
+    uint64_t m_targetId;
+    bool m_hasResidentTarget;
 
-    bool m_bInterrupt;
+    Common::ActionInterruptType m_interruptType;
 
     FrameworkPtr m_pFw;
 
+    Common::FFXIVARR_POSITION3 m_pos;
+
+    std::array< EffectPacketData, MAX_ACTION_EFFECT_PACKET_IDENT > m_effects;
   };
 }
 
