@@ -537,19 +537,19 @@ namespace Sapphire::Common
     Unaspected = 7    // Doesn't imply magical unaspected damage - could be unaspected physical
   };
 
-  enum class ActionCostType : uint8_t
+  enum class ActionPrimaryCostType : uint8_t
   {
     None = 0, // ?
     MagicPoints = 3,
     TacticsPoints = 5,
-    WARGauge = 22,
-    DRKGauge = 25,
-    AetherflowStack = 30,
-    Status = 32,
-    PLDGauge = 41,
-    RDMGaugeBoth = 74,
-//  RDMGaugeBlack = 75, // not right?
-    DRGGauge3Eyes = 76,
+//    WARGauge = 22,
+//    DRKGauge = 25,
+//    AetherflowStack = 30,
+//    Status = 32,
+//    PLDGauge = 41,
+//    RDMGaugeBoth = 74,
+////  RDMGaugeBlack = 75, // not right?
+//    DRGGauge3Eyes = 76,
   };
 
   enum class ActionType : int8_t
@@ -929,6 +929,12 @@ namespace Sapphire::Common
     HasEstateGreeting = 4,
     EstateFlagUnknown = 8,
     IsFreeCompanyEstate = 16,
+  };
+
+  struct PlayerTeleportQuery
+  {
+    uint16_t targetAetheryte;
+    uint16_t cost;
   };
 
   using PlayerStateFlagList = std::vector< PlayerStateFlag >;

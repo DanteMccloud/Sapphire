@@ -18,11 +18,11 @@ public:
   EventAction( Entity::CharaPtr pActor, uint32_t eventId, uint16_t action,
                ActionCallback finishRef, ActionCallback interruptRef, uint64_t additional, FrameworkPtr pFw );
 
-  void castStart() override;
+  void start() override;
 
-  void castFinish() override;
+  void execute() override;
 
-  void castInterrupt() override;
+  void interrupt() override;
 
 private:
   uint32_t m_eventId;

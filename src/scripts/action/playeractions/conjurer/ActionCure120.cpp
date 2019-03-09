@@ -3,22 +3,20 @@
 #include <Actor/Player.h>
 #include <Action/Action.h>
 
-class ActionReturn6 :
+class ActionCure120 :
   public Sapphire::ScriptAPI::ActionScript
 {
 public:
-  ActionReturn6() :
-    Sapphire::ScriptAPI::ActionScript( 6 )
+  ActionCure120() :
+    Sapphire::ScriptAPI::ActionScript( 120 )
   {
   }
 
   void onExecute( Sapphire::Action::Action& action ) override
   {
-    if( !action.getSourceChara()->isPlayer() )
-      return;
 
-    action.getSourceChara()->getAsPlayer()->returnToHomepoint();
   }
+
 };
 
-EXPOSE_SCRIPT( ActionReturn6 );
+EXPOSE_SCRIPT( ActionCure120 );

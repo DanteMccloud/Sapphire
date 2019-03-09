@@ -26,7 +26,7 @@ Sapphire::Action::EventAction::EventAction( Entity::CharaPtr pActor, uint32_t ev
   m_id = action;
   m_pFw = pFw;
   auto pExdData = pFw->get< Data::ExdDataGenerated >();
-  m_castTime = pExdData->get< Sapphire::Data::EventAction >( action )->castTime * 1000; // TODO: Add security checks.
+  m_castTimeMs = pExdData->get< Sapphire::Data::EventAction >( action )->castTime * 1000; // TODO: Add security checks.
   m_onActionFinishClb = std::move( finishRef );
   m_onActionInterruptClb = std::move( interruptRef );
   m_pSource = std::move( pActor );
@@ -35,7 +35,7 @@ Sapphire::Action::EventAction::EventAction( Entity::CharaPtr pActor, uint32_t ev
 
 Sapphire::Action::EventAction::~EventAction() = default;
 
-void Sapphire::Action::EventAction::castStart()
+void Sapphire::Action::EventAction::start()
 {
   if( !m_pSource )
     return;
@@ -54,7 +54,7 @@ void Sapphire::Action::EventAction::castStart()
     m_pSource->sendToInRangeSet( control );
 }
 
-void Sapphire::Action::EventAction::castFinish()
+void Sapphire::Action::EventAction::execute()
 {
   if( !m_pSource )
     return;
@@ -90,7 +90,7 @@ void Sapphire::Action::EventAction::castFinish()
 
 }
 
-void Sapphire::Action::EventAction::castInterrupt()
+void Sapphire::Action::EventAction::interrupt()
 {
   if( !m_pSource )
     return;

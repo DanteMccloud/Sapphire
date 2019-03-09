@@ -12,9 +12,10 @@ public:
   {
   }
 
-  void onCharaHit( Sapphire::Action::Action& currentAction, Sapphire::Entity::Chara& hitActor ) override
+  void onExecute( Sapphire::Action::Action& action ) override
   {
-    currentAction.damageTarget( 150, hitActor );
+    if( auto player = action.getSourceChara()->getAsPlayer() )
+      player->sendDebug( "Imagine you just hit an enemy for 150 potency. Incredible, right?" );
   }
 
 };
