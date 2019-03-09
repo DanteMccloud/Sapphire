@@ -88,15 +88,15 @@ namespace Sapphire::ScriptAPI
   {
   }
 
-  void ActionScript::onStart( Entity::Chara& sourceActor, Entity::Chara& targetActor )
+  void ActionScript::onStart( Sapphire::Action::Action& action )
   {
   }
 
-  void ActionScript::onCastFinish( Entity::Player& player, Entity::Chara& targetActor )
+  void ActionScript::onExecute( Sapphire::Action::Action& action )
   {
   }
 
-  void ActionScript::onInterrupt( Entity::Chara& sourceActor/*, Sapphire::Entity::Chara targetActor*/ )
+  void ActionScript::onInterrupt( Sapphire::Action::Action& action )
   {
   }
 
@@ -141,6 +141,10 @@ namespace Sapphire::ScriptAPI
   {
   }
 
+  void EventScript::onEObjHit( Sapphire::Entity::Player& player, uint64_t actorId )
+  {
+  }
+
   ///////////////////////////////////////////////////////////////////
 
   EventObjectScript::EventObjectScript( uint32_t eobjId ) :
@@ -177,15 +181,15 @@ namespace Sapphire::ScriptAPI
   {
   }
 
-  void InstanceContentScript::onInit( InstanceContentPtr instance )
+  void InstanceContentScript::onInit( InstanceContent& instance )
   {
   }
 
-  void InstanceContentScript::onUpdate( InstanceContentPtr instance, uint32_t currTime )
+  void InstanceContentScript::onUpdate( InstanceContent& instance, uint32_t currTime )
   {
   }
 
-  void InstanceContentScript::onEnterTerritory( InstanceContentPtr instance, Entity::Player& player, uint32_t eventId,
+  void InstanceContentScript::onEnterTerritory( InstanceContent& instance, Entity::Player& player, uint32_t eventId,
                                                 uint16_t param1, uint16_t param2 )
   {
   }
