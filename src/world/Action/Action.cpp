@@ -26,50 +26,70 @@ using namespace Sapphire::Network::ActorControl;
 Sapphire::Action::Action::Action() = default;
 Sapphire::Action::Action::~Action() = default;
 
+Sapphire::Action::Action::Action( Entity::CharaPtr caster, uint32_t actionId, FrameworkPtr fw ) :
+                                  Action( std::move( caster ), actionId, nullptr, std::move( fw ) )
+{
+}
+
 Sapphire::Action::Action::Action( Entity::CharaPtr caster, uint32_t actionId,
-                                  Data::ActionPtr action, FrameworkPtr fw ) :
+                                  Data::ActionPtr actionData, FrameworkPtr fw ) :
                                   m_pSource( std::move( caster ) ),
                                   m_pFw( std::move( fw ) ),
+                                  m_actionData( std::move( actionData ) ),
                                   m_id( actionId ),
+                                  m_targetId( 0 ),
                                   m_startTime( 0 ),
-                                  m_interruptType( Common::ActionInterruptType::None ),
-                                  m_hasResidentTarget( false )
+                                  m_interruptType( Common::ActionInterruptType::None )
 {
-  m_castTime = static_cast< uint32_t >( action->cast100ms * 100 );
-  m_recastTime = static_cast< uint16_t >( action->recast100ms * 100 );
-  m_cooldownGroup = action->cooldownGroup;
-  m_range = action->range;
-  m_effectRange = action->effectRange;
-  m_aspect = static_cast< Common::ActionAspect >( action->aspect );
-
-  // a default range is set by the game for the class/job
-  if( m_range == -1 )
-  {
-    switch( static_cast< Common::ClassJob >( action->classJob ) )
-    {
-      case Common::ClassJob::Bard:
-      case Common::ClassJob::Archer:
-        m_range = 25;
-
-      // anything that isnt ranged
-      default:
-        m_range = 3;
-    }
-  }
-
-  m_actionCost.fill( { Common::ActionCostType::None, 0 } );
-
-  m_actionCost[ 0 ] = {
-    static_cast< Common::ActionCostType >( action->costType ),
-    action->cost
-  };
-
-  calculateActionCost();
 }
 
 uint32_t Sapphire::Action::Action::getId() const
 {
   return m_id;
+}
+
+bool Sapphire::Action::Action::init()
+{
+  if( !m_actionData )
+  {
+    // need to get actionData
+    auto exdData = m_pFw->get< Data::ExdDataGenerated >();
+    assert( exdData );
+
+    auto actionData = exdData->get< Data::Action >( m_id );
+    assert( actionData );
+
+    m_actionData = actionData;
+  }
+
+  m_castTimeMs = static_cast< uint32_t >( m_actionData->cast100ms * 100 );
+  m_recastTimeMs = static_cast< uint32_t >( m_actionData->recast100ms * 100 );
+  m_cooldownGroup = m_actionData->cooldownGroup;
+  m_range = m_actionData->range;
+  m_effectRange = m_actionData->effectRange;
+  m_aspect = static_cast< Common::ActionAspect >( m_actionData->aspect );
+
+  // a default range is set by the game for the class/job
+  if( m_range == -1 )
+  {
+    switch( static_cast< Common::ClassJob >( m_actionData->classJob ) )
+    {
+      case Common::ClassJob::Bard:
+      case Common::ClassJob::Archer:
+        m_range = 25;
+
+        // anything that isnt ranged
+      default:
+        m_range = 3;
+    }
+  }
+
+  m_primaryCostType = static_cast< Common::ActionPrimaryCostType >( m_actionData->costType );
+  m_primaryCost = m_actionData->cost;
+
+  // todo: add missing rows for secondaryCostType/secondaryCostType and rename the current rows to primaryCostX
+
+  return true;
 }
 
 void Sapphire::Action::Action::setPos( Sapphire::Common::FFXIVARR_POSITION3 pos )
@@ -82,29 +102,19 @@ Sapphire::Common::FFXIVARR_POSITION3 Sapphire::Action::Action::getPos() const
   return m_pos;
 }
 
-void Sapphire::Action::Action::setTargetChara( Sapphire::Entity::CharaPtr chara )
-{
-  assert( chara );
-
-  m_pTarget = chara;
-  m_targetId = chara->getId();
-  m_hasResidentTarget = false;
-}
-
-void Sapphire::Action::Action::setResidentTargetId( uint64_t targetId )
+void Sapphire::Action::Action::setTargetId( uint64_t targetId )
 {
   m_targetId = targetId;
-  m_hasResidentTarget = true;
 }
 
-bool Sapphire::Action::Action::hasResidentTarget() const
+uint64_t Sapphire::Action::Action::getTargetId() const
 {
-  return m_hasResidentTarget;
+  return m_targetId;
 }
 
-Sapphire::Entity::CharaPtr Sapphire::Action::Action::getTargetChara() const
+bool Sapphire::Action::Action::hasClientsideTarget() const
 {
-  return m_pTarget;
+  return m_targetId > 0xFFFFFFFF;
 }
 
 bool Sapphire::Action::Action::isInterrupted() const
@@ -119,17 +129,17 @@ void Sapphire::Action::Action::setInterrupted( Common::ActionInterruptType type 
 
 uint32_t Sapphire::Action::Action::getCastTime() const
 {
-  return m_castTime;
+  return m_castTimeMs;
 }
 
 void Sapphire::Action::Action::setCastTime( uint32_t castTime )
 {
-  m_castTime = castTime;
+  m_castTimeMs = castTime;
 }
 
 bool Sapphire::Action::Action::hasCastTime() const
 {
-  return m_castTime > 0;
+  return m_castTimeMs > 0;
 }
 
 Sapphire::Entity::CharaPtr Sapphire::Action::Action::getSourceChara() const
@@ -145,27 +155,27 @@ bool Sapphire::Action::Action::update()
 
   if( isInterrupted() )
   {
-    castInterrupt();
+    interrupt();
     return true;
   }
 
-  if( !hasResidentTarget() )
+  if( !hasClientsideTarget() )
   {
     // todo: check if the target is still in range
   }
 
   uint64_t currTime = Util::getTimeMs();
 
-  if( !hasCastTime() || std::difftime( currTime, m_startTime ) > m_castTime )
+  if( !hasCastTime() || std::difftime( currTime, m_startTime ) > m_castTimeMs )
   {
-    castFinish();
+    execute();
     return true;
   }
 
   return false;
 }
 
-void Sapphire::Action::Action::castStart()
+void Sapphire::Action::Action::start()
 {
   assert( m_pSource );
 
@@ -181,7 +191,7 @@ void Sapphire::Action::Action::castStart()
     castPacket->data().skillType = Common::SkillType::Normal;
     castPacket->data().unknown_1 = m_id;
     // This is used for the cast bar above the target bar of the caster.
-    castPacket->data().cast_time = m_castTime / 1000.f;
+    castPacket->data().cast_time = m_castTimeMs / 1000.f;
     castPacket->data().target_id = static_cast< uint32_t >( m_targetId );
 
     m_pSource->sendToInRangeSet( castPacket, true );
@@ -192,15 +202,19 @@ void Sapphire::Action::Action::castStart()
     }
   }
 
+  // todo: m_recastTimeMs needs to be adjusted for player sks/sps
+  auto actionStartPkt = makeActorControl143( m_pSource->getId(), ActorControlType::ActionStart, 1, getId(), m_recastTimeMs / 10 );
+  player->queuePacket( actionStartPkt );
+
   auto pScriptMgr = m_pFw->get< Scripting::ScriptMgr >();
-  if( !pScriptMgr->onCastStart( *this ) )
+  if( !pScriptMgr->onStart( *this ) )
   {
     // script not implemented
-    castInterrupt();
+    interrupt();
 
     if( player )
     {
-      player->sendUrgent( "Action not implemented, missing script for actionId#{0}", getId() );
+      player->sendUrgent( "Action not implemented, missing script for action#{0}", getId() );
       player->setCurrentAction( nullptr );
     }
 
@@ -209,10 +223,10 @@ void Sapphire::Action::Action::castStart()
 
   // instantly finish cast if there's no cast time
   if( !hasCastTime() )
-    castFinish();
+    execute();
 }
 
-void Sapphire::Action::Action::castInterrupt()
+void Sapphire::Action::Action::interrupt()
 {
   assert( m_pSource );
 
@@ -220,9 +234,6 @@ void Sapphire::Action::Action::castInterrupt()
   if( m_pSource->isPlayer() )
   {
     auto player = m_pSource->getAsPlayer();
-
-    auto resetCooldownPkt = makeActorControl143( m_pSource->getId(), ActorControlType::SetActionCooldown, 1, getId(), 0 );
-    player->queuePacket( resetCooldownPkt );
 
     // todo: reset cooldown for actual player
 
@@ -246,10 +257,10 @@ void Sapphire::Action::Action::castInterrupt()
   }
 
   auto pScriptMgr = m_pFw->get< Scripting::ScriptMgr >();
-  pScriptMgr->onCastInterrupt( *this );
+  pScriptMgr->onInterrupt( *this );
 }
 
-void Sapphire::Action::Action::castFinish()
+void Sapphire::Action::Action::execute()
 {
   assert( m_pSource );
 
@@ -257,170 +268,65 @@ void Sapphire::Action::Action::castFinish()
 
   if( hasCastTime() )
   {
+    // todo: what's this?
     /*auto control = ActorControlPacket143( m_pTarget->getId(), ActorControlType::Unk7,
                                             0x219, m_id, m_id, m_id, m_id );
     m_pSource->sendToInRangeSet( control, true );*/
 
+    if( auto player = m_pSource->getAsPlayer() )
+    {
+      player->unsetStateFlag( PlayerStateFlag::Casting );
+    }
   }
 
-  pScriptMgr->onCastFinish( *this );
-
-  if( !hasResidentTarget() )
+  if( !hasClientsideTarget() )
   {
-    assert( m_pTarget );
-    // todo: calculate final hit targets and call onCharaHit in action script
-    pScriptMgr->onCharaHit( *this, *m_pTarget );
+    pScriptMgr->onExecute( *this );
   }
   else if( auto player = m_pSource->getAsPlayer() )
   {
     pScriptMgr->onEObjHit( *player, m_targetId );
     return;
   }
-
-  buildEffectPackets();
-}
-
-void Sapphire::Action::Action::buildEffectPackets()
-{
-  for( int i = 0; i < EffectPacketIdentity::MAX_ACTION_EFFECT_PACKET_IDENT; ++i )
-  {
-    auto& packetData = m_effects[ static_cast< EffectPacketIdentity >( i ) ];
-
-    auto actorsHit = packetData.m_hitActors.size();
-    if( actorsHit == 0 )
-      continue;
-
-    // get effect sequence
-    auto zone = m_pSource->getCurrentZone();
-    assert( zone );
-
-    auto sequence = zone->getNextEffectSequence();
-
-    if( actorsHit == 1 )
-    {
-      // send normal effect
-      auto effectPacket = std::make_shared< Network::Packets::Server::EffectPacket >( m_pSource->getId(), m_pTarget->getId(), getId() );
-      effectPacket->setTargetActor( packetData.m_hitActors[ 0 ] );
-      effectPacket->setSequence( sequence );
-      effectPacket->setDisplayType( Common::ActionEffectDisplayType::ShowActionName );
-
-      for( auto& effect : packetData.m_entries )
-      {
-        effectPacket->addEffect( effect );
-      }
-
-      m_pSource->sendToInRangeSet( effectPacket, true );
-    }
-    else
-    {
-      // todo: aoe effects
-    }
-  }
-}
-
-void Sapphire::Action::Action::damageTarget( uint16_t potency, Entity::Chara& chara )
-{
-  // todo: scale potency into damage from stats
-
-  Common::EffectEntry entry{};
-
-  // todo: handle cases where the action misses/is blocked?
-  entry.effectType = Common::ActionEffectType::Damage;
-
-  // todo: handle crits
-  entry.hitSeverity = Common::ActionHitSeverityType::NormalDamage;
-
-  // todo: handle > 65535 damage values, not sure if this is right?
-  if( potency > 65535 )
-  {
-    entry.value = static_cast< int16_t >( potency / 10 );
-    // todo: rename this? need to confirm how it works again
-    entry.valueMultiplier = 1;
-  }
-  else
-    entry.value = static_cast< int16_t >( potency );
-
-  // add to aggro table
-  // todo: probably move this into takeDamage? this is pretty garbage
-  if( chara.isBattleNpc() )
-  {
-    auto bNpc = chara.getAsBNpc();
-    if( bNpc )
-    {
-      if( bNpc->getStance() != Common::Stance::Active )
-      {
-        bNpc->aggro( getSourceChara() );
-        bNpc->hateListUpdate( getSourceChara(), potency );
-      }
-      else
-      {
-        bNpc->hateListUpdate( getSourceChara(), potency );
-      }
-    }
-  }
-
-  // todo: aspected damage?
-  chara.takeDamage( potency );
-
-  if( auto player = m_pSource->getAsPlayer() )
-    player->sendDebug( "hit actorId#{0} for potency: {1}", chara.getId(), potency );
-
-  m_effects[ EffectPacketIdentity::DamageEffect ].m_entries.emplace_back( entry );
-
-  // todo: make sure that we don't add the same actor more than once
-  m_effects[ EffectPacketIdentity::DamageEffect ].m_hitActors.emplace_back( chara.getId() );
-}
-
-void Sapphire::Action::Action::healTarget( uint16_t potency, Entity::Chara& chara )
-{
-  // todo: scale potency into healing from stats
-
-  Common::EffectEntry entry{};
-
-  entry.effectType = Common::ActionEffectType::Heal;
-
-  // todo: handle crits
-  entry.hitSeverity = Common::ActionHitSeverityType::NormalHeal;
-
-  // todo: handle > 65535 healing values, not sure if this is right?
-  if( potency > 65535 )
-  {
-    entry.value = static_cast< int16_t >( potency / 10 );
-    // todo: rename this? need to confirm how it works again
-    entry.valueMultiplier = 1;
-  }
-  else
-    entry.value = static_cast< int16_t >( potency );
-
-  chara.heal( potency );
-
-  if( auto player = m_pSource->getAsPlayer() )
-    player->sendDebug( "hit actorId#{0} for heal: {1}", chara.getId(), potency );
-
-  m_effects[ EffectPacketIdentity::HealingEffect ].m_entries.emplace_back( entry );
-
-  // todo: make sure that we don't add the same actor more than once
-  m_effects[ EffectPacketIdentity::HealingEffect ].m_hitActors.emplace_back( chara.getId() );
-}
-
-const Sapphire::Action::Action::ActionCostArray& Sapphire::Action::Action::getCostArray() const
-{
-  return m_actionCost;
 }
 
 void Sapphire::Action::Action::calculateActionCost()
 {
-  for( uint8_t i = 0; i < m_actionCost.size(); ++i )
+  // todo: just a test handler for now to get MP output for each cast, not sure where we should put this
+  // check primary cost
+  switch( m_primaryCostType )
   {
-    auto& entry = m_actionCost[ i ];
+    case ActionPrimaryCostType::None:
+    {
+      break;
+    }
+    case ActionPrimaryCostType::MagicPoints:
+    {
+      calculateMPCost( m_primaryCost );
+      break;
+    }
+    case ActionPrimaryCostType::TacticsPoints:
+    {
+      break;
+    }
 
-    if( entry.m_costType == ActionCostType::MagicPoints )
-      calculateMPCost( i );
+    default:
+    {
+      if( auto player = m_pSource->getAsPlayer() )
+      {
+        player->sendDebug( "action#{0} is missing a handler for cost type: {1}",
+                           m_id, static_cast< uint8_t >( m_primaryCostType ) );
+      }
+
+      break;
+    }
   }
+
+  // todo: secondary cost type needs to be handled
 }
 
 // todo: this shouldn't be in action and instead be in some general stat calc util
-void Sapphire::Action::Action::calculateMPCost( uint8_t costArrayIndex )
+void Sapphire::Action::Action::calculateMPCost( uint16_t baseCost )
 {
   auto level = m_pSource->getLevel();
 
@@ -429,9 +335,7 @@ void Sapphire::Action::Action::calculateMPCost( uint8_t costArrayIndex )
   // dividing by 10 on the border will break this unless we subtract 1
   auto levelGroup = std::max< uint8_t >( level - 1, 1 ) / 10;
 
-  auto& costEntry = m_actionCost[ costArrayIndex ];
-
-  float cost = costEntry.m_cost;
+  float cost = baseCost;
 
   // thanks to andrew for helping me figure this shit out, should be pretty accurate
   switch( levelGroup )
@@ -444,7 +348,7 @@ void Sapphire::Action::Action::calculateMPCost( uint8_t costArrayIndex )
       break;
     }
 
-      // level 11-20
+    // level 11-20
     case 1:
     {
       // r^2 = 1
@@ -452,7 +356,7 @@ void Sapphire::Action::Action::calculateMPCost( uint8_t costArrayIndex )
       break;
     }
 
-      // level 21-30
+    // level 21-30
     case 2:
     {
       // r^2 = 1
@@ -460,7 +364,7 @@ void Sapphire::Action::Action::calculateMPCost( uint8_t costArrayIndex )
       break;
     }
 
-      // level 31-40
+    // level 31-40
     case 3:
     {
       // r^2 = 1
@@ -476,7 +380,7 @@ void Sapphire::Action::Action::calculateMPCost( uint8_t costArrayIndex )
       break;
     }
 
-      // level 51-60
+    // level 51-60
     case 5:
     {
       // r^2 = 1
@@ -484,7 +388,7 @@ void Sapphire::Action::Action::calculateMPCost( uint8_t costArrayIndex )
       break;
     }
 
-      // level 61-70
+    // level 61-70
     case 6:
     {
       // r^2 = 0.9998
@@ -496,9 +400,82 @@ void Sapphire::Action::Action::calculateMPCost( uint8_t costArrayIndex )
       return;
   }
 
-  // m_cost is the base cost, cost is the multiplier for the current player level
-  costEntry.m_cost = static_cast< uint16_t >( std::round( cost * costEntry.m_cost ) );
+  // m_primaryCost is the base cost, cost is the multiplier for the current player level
+  m_primaryCost = static_cast< uint16_t >( std::round( cost * baseCost ) );
 
   if( auto player = m_pSource->getAsPlayer() )
-    player->sendDebug( "calculated mp cost: {0}", costEntry.m_cost );
+    player->sendDebug( "calculated mp cost: {0}", m_primaryCost );
+}
+
+bool Sapphire::Action::Action::precheck()
+{
+  if( auto player = m_pSource->getAsPlayer() )
+  {
+    if( !playerPrecheck( *player ) )
+      return false;
+  }
+
+  return true;
+}
+
+bool Sapphire::Action::Action::playerPrecheck( Entity::Player& player )
+{
+  // lol
+  if( !player.isAlive() )
+    return false;
+
+  // npc actions/non player actions
+  if( m_actionData->classJob == -1 )
+    return false;
+
+  if( player.getLevel() < m_actionData->classJobLevel )
+    return false;
+
+  auto currentClass = player.getClass();
+  auto actionClass = static_cast< Common::ClassJob >( m_actionData->classJob );
+
+  if( actionClass != Common::ClassJob::Adventurer && currentClass != actionClass )
+  {
+    // check if not a base class action
+    auto exdData = m_pFw->get< Data::ExdDataGenerated >();
+    assert( exdData );
+
+    auto classJob = exdData->get< Data::ClassJob >( static_cast< uint8_t >( currentClass ) );
+    if( !classJob )
+      return false;
+
+    if( classJob->classJobParent != m_actionData->classJob )
+      return false;
+  }
+
+  // reset target on actions that can only be casted on yourself while having a target set
+  // todo: check what actions send when targeting an enemy
+//  if( m_actionData->canTargetSelf &&
+//      !m_actionData->canTargetFriendly &&
+//      !m_actionData->canTargetHostile &&
+//      !m_actionData->canTargetParty )
+//  {
+//    setTargetId( getSourceChara() );
+//  }
+
+  // todo: party/enemy validation
+
+  // validate range
+
+
+  // todo: validate costs/conditionals here
+
+  calculateActionCost();
+
+  return true;
+}
+
+uint32_t Sapphire::Action::Action::getAdditionalData() const
+{
+  return m_additionalData;
+}
+
+void Sapphire::Action::Action::setAdditionalData( uint32_t data )
+{
+  m_additionalData = data;
 }

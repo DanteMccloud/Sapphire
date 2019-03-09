@@ -18,27 +18,22 @@ namespace Sapphire::Action
   {
 
   public:
-    struct ActionCostEntry
-    {
-      Common::ActionCostType m_costType;
-      uint16_t m_cost;
-    };
-
-    using ActionCostArray = std::array< ActionCostEntry, 2 >;
 
     Action();
-    Action( Entity::CharaPtr caster, uint32_t actionId, Data::ActionPtr action, FrameworkPtr fw );
+    Action( Entity::CharaPtr caster, uint32_t actionId, FrameworkPtr fw );
+    Action( Entity::CharaPtr caster, uint32_t actionId, Data::ActionPtr actionData, FrameworkPtr fw );
 
     virtual ~Action();
 
     uint32_t getId() const;
 
+    bool init();
+
     void setPos( Common::FFXIVARR_POSITION3 pos );
     Common::FFXIVARR_POSITION3 getPos() const;
 
-    void setTargetChara( Entity::CharaPtr chara );
-    void setResidentTargetId( uint64_t targetId );
-    Entity::CharaPtr getTargetChara() const;
+    void setTargetId( uint64_t targetId );
+    uint64_t getTargetId() const;
     Entity::CharaPtr getSourceChara() const;
 
     bool isInterrupted() const;
@@ -47,13 +42,14 @@ namespace Sapphire::Action
     uint32_t getCastTime() const;
     void setCastTime( uint32_t castTime );
 
+    uint32_t getAdditionalData() const;
+    void setAdditionalData( uint32_t data );
+
     /*!
      * @brief Checks if the action *may* target a resident instead of an actor
      * @return true if the target *may* be a resident and not an actor, otherwise false.
      */
-    bool hasResidentTarget() const;
-
-    const ActionCostArray& getCostArray() const;
+    bool hasClientsideTarget() const;
 
     /*!
      * @brief Tests whether the action is instantly usable or has a cast assoc'd with it
@@ -61,81 +57,67 @@ namespace Sapphire::Action
      */
     bool hasCastTime() const;
 
-    void buildEffectPackets();
-
     /*!
-     * @brief Damages a target and adds the effect entry
-     * @param potency The amount of damage the target takes
-     * @param chara The chara to inflict damage upon
+     * @brief Tests if an action is castable by the current source chara
+     * @return true if castable, false if the caster doesn't meet the requirements
      */
-    void damageTarget( uint16_t potency, Entity::Chara& chara );
-
-    /*!
-     * @brief Heals a target and adds the effect entry
-     * @param potency Amount of healing to apply
-     * @param chara Chara to receive healing
-     */
-    void healTarget( uint16_t potency, Entity::Chara& chara );
+    bool precheck();
 
     /*!
      * @brief Starts the cast. Finishes it immediately if there is no cast time (weaponskills).
      */
-    virtual void castStart();
-    virtual void castFinish();
-    virtual void castInterrupt();
+    virtual void start();
 
-    // update action, if returns true, action is done and has to be removed from the actor
+    /*!
+     * @brief Finishes the cast, effected targets are calculated here.
+     */
+    virtual void execute();
+
+    /*!
+     * @brief Called when a cast is interrupted for any reason
+     *
+     * m_interruptType will have the reason why the action was interrupted (eg. damage, movement, ...)
+     */
+    virtual void interrupt();
+
+    /*!
+     * @brief Called on each player update tick
+     * @return true if a cast has finished and should be removed from the owning chara
+     */
     virtual bool update();
 
   protected:
 
     void calculateActionCost();
-    void calculateMPCost( uint8_t costArrayIndex );
+    void calculateMPCost( uint16_t baseCost );
 
-    /*!
-     * @brief Some actions are capable of both healing and dealing damage. This identifies them.
-     */
-    enum EffectPacketIdentity : uint8_t
-    {
-      DamageEffect,
-      HealingEffect,
-
-      MAX_ACTION_EFFECT_PACKET_IDENT
-    };
-
-    struct EffectPacketData
-    {
-      std::vector< Common::EffectEntry > m_entries;
-      std::vector< uint32_t > m_hitActors;
-    };
+    bool playerPrecheck( Entity::Player& player );
 
     uint32_t m_id;
 
-    Common::ActionCostType m_costType;
-    uint16_t m_cost;
-
-    ActionCostArray m_actionCost;
+    Common::ActionPrimaryCostType m_primaryCostType;
+    uint16_t m_primaryCost;
 
     uint64_t m_startTime;
-    uint32_t m_castTime;
-    uint16_t m_recastTime;
+    uint32_t m_castTimeMs;
+    uint32_t m_recastTimeMs;
     uint8_t m_cooldownGroup;
     int8_t m_range;
     uint8_t m_effectRange;
     Common::ActionAspect m_aspect;
 
+    uint32_t m_additionalData;
+
     Entity::CharaPtr m_pSource;
     Entity::CharaPtr m_pTarget;
     uint64_t m_targetId;
-    bool m_hasResidentTarget;
 
     Common::ActionInterruptType m_interruptType;
 
     FrameworkPtr m_pFw;
+    Data::ActionPtr m_actionData;
 
     Common::FFXIVARR_POSITION3 m_pos;
-
-    std::array< EffectPacketData, MAX_ACTION_EFFECT_PACKET_IDENT > m_effects;
   };
 }
 
