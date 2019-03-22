@@ -1,5 +1,5 @@
-#ifndef _GAMEPACKET_NEW_H
-#define _GAMEPACKET_NEW_H
+#ifndef _GAMEPACKET_H
+#define _GAMEPACKET_H
 
 #include <stdint.h>
 #include <iostream>
@@ -19,7 +19,6 @@ namespace Sapphire::Network::Packets
 
   // Must forward define these in order to enable the compiler to produce the
   // correct template functions.
-
   template< typename T, typename T1 >
   class FFXIVIpcPacket;
 
@@ -330,7 +329,6 @@ namespace Sapphire::Network::Packets
     std::vector< uint8_t > m_data;
   };
 
-
 }
 
-#endif /*_CORE_NETWORK_PACKETS_CGAMEPACKETNEW_H*/
+#endif

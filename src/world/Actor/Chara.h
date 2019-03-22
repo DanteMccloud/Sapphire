@@ -65,6 +65,9 @@ namespace Sapphire::Entity
 
     } m_baseStats;
 
+    // array for bonuses, 80 to have some spare room.
+    uint32_t m_bonusStats[ 80 ];
+
   protected:
     char m_name[34];
     /*! Last tick time for the actor  ( in ms ) */
@@ -239,6 +242,8 @@ namespace Sapphire::Entity
     Action::ActionPtr getCurrentAction() const;
 
     void setCurrentAction( Action::ActionPtr pAction );
+
+    uint32_t getBonusStat( Common::BaseParam bonus ) const;
 
   };
 
